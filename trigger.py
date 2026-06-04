@@ -15,17 +15,13 @@ import os
 import socket
 import sys
 from urllib.parse import urlparse
-
 import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
 
-STUDENT_ID   = os.getenv("STUDENT_ID", "B22DCAT016").upper()
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://192.168.50.172:8000/api/v1/proxy")
-
-# Teacher base = LLM_BASE_URL bỏ "/proxy" ở cuối
-TEACHER_BASE_URL = LLM_BASE_URL.rstrip("/").removesuffix("/proxy")
+STUDENT_ID       = os.getenv("STUDENT_ID",       "B22DCAT082").upper()
+TEACHER_BASE_URL = os.getenv("TEACHER_BASE_URL", "http://192.168.50.218:8000/api/v1")
 
 HEADERS = {"X-Student-ID": STUDENT_ID}
 
@@ -34,7 +30,7 @@ def get_lan_ip() -> str:
     """Lấy IP LAN của máy bằng cách 'giả vờ' connect tới Teacher Server.
     Không gửi packet thật — chỉ để OS chọn network interface đúng."""
     parsed = urlparse(TEACHER_BASE_URL)
-    teacher_host = parsed.hostname or "192.168.50.172"
+    teacher_host = parsed.hostname or "192.168.50.218"
     teacher_port = parsed.port or 8000
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -76,7 +72,7 @@ def evaluate() -> None:
     resp = httpx.post(
         f"{TEACHER_BASE_URL}/competition/evaluate",
         headers=HEADERS,
-        timeout=60 * 15,  # tối đa 15 phút cho toàn bộ quá trình
+        timeout=60 * 15,
     )
     pretty(resp)
 

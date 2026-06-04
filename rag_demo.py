@@ -21,16 +21,16 @@ from sentence_transformers import SentenceTransformer
 load_dotenv()
 
 # ── Config ──────────────────────────────────────────────────────────────────
-EMBED_MODEL_NAME = os.getenv("EMBED_MODEL_NAME", "keepitreal/vietnamese-sbert")
-MODEL_CACHE_DIR  = os.getenv("MODEL_CACHE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "models"))
+EMBED_MODEL_NAME = os.getenv("EMBED_MODEL_NAME", "bkai-foundation-models/vietnamese-bi-encoder")
+MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "models"))
 
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://192.168.50.218:8000/api/v1/proxy")
-LLM_MODEL    = os.getenv("LLM_MODEL",    "gpt-4o-mini")
-STUDENT_ID   = os.getenv("STUDENT_ID",   "B22DCAT082")
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+STUDENT_ID = os.getenv("STUDENT_ID", "B22DCAT082")
 
-CHUNK_SIZE    = 350
+CHUNK_SIZE = 350
 CHUNK_OVERLAP = 50
-TOP_K         = 10
+TOP_K = 10
 
 # ── Load local embedding model (lazy, loaded once) ───────────────────────────
 logger.info(f"Loading embedding model: {EMBED_MODEL_NAME}")
@@ -126,6 +126,7 @@ def embed(texts: list[str]) -> list[list[float]]:
 
 _VALID_LETTERS = {"A", "B", "C", "D"}
 
+
 def extract_letter(raw: str) -> str:
     if not raw:
         return "A"
@@ -149,17 +150,13 @@ def call_llm(question: str, context: str) -> str:
         "BẮT BUỘC chỉ trả lời bằng MỘT ký tự duy nhất: A, B, C hoặc D. "
         "Không giải thích, không viết gì thêm."
     )
-    user_prompt = (
-        f"Tài liệu tham khảo:\n{context}\n\n"
-        f"Câu hỏi trắc nghiệm:\n{question}\n\n"
-        "Đáp án (chỉ 1 ký tự A/B/C/D):"
-    )
+    user_prompt = f"Tài liệu tham khảo:\n{context}\n\nCâu hỏi trắc nghiệm:\n{question}\n\nĐáp án (chỉ 1 ký tự A/B/C/D):"
     client = OpenAI(base_url=LLM_BASE_URL, api_key=STUDENT_ID)
     resp = client.chat.completions.create(
         model=LLM_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": user_prompt},
+            {"role": "user", "content": user_prompt},
         ],
         max_tokens=4,
         temperature=0.0,
@@ -222,7 +219,7 @@ def ask(req: AskRequest):
     results = store.search(q_vec, k=TOP_K)
     if not results:
         logger.warning("Không tìm thấy chunk liên quan")
-        return AskResponse(answer="Không tìm thấy thông tin liên quan.", sources=[])
+        return AskResponse(answer="A", sources=[])
 
     sources = [chunk_id for chunk_id, _, _ in results]
     logger.info(f"Tìm thấy {len(results)} chunk | sources: {sources} | scores: {[round(s, 3) for _, _, s in results]}")

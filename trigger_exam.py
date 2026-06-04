@@ -21,10 +21,16 @@ def evaluate():
     
 def reset():
     url = f"{TEACHER_BASE_URL}/competition/reset"
-    res = requests.post(url,headers=headers)
-    print("Oke")
+    res = requests.post(url, headers=headers)
+    print("Reset Response:", res.json())
+
+def result():
+    url = f"{TEACHER_BASE_URL}/competition/result"
+    res = requests.get(url, headers=headers)
+    print("Result Response:", res.json())
 
 if __name__ == "__main__":
     reset()
     register()
     evaluate()
+    result()
