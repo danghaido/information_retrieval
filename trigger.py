@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 STUDENT_ID       = os.getenv("STUDENT_ID",       "B22DCAT082").upper()
-TEACHER_BASE_URL = os.getenv("TEACHER_BASE_URL", "http://192.168.50.218:8000/api/v1")
+TEACHER_BASE_URL = os.getenv("TEACHER_BASE_URL", "http://10.170.45.200:8000/api/v1")
 
 HEADERS = {"X-Student-ID": STUDENT_ID}
 

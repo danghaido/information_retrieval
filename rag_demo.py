@@ -24,13 +24,13 @@ load_dotenv()
 EMBED_MODEL_NAME = os.getenv("EMBED_MODEL_NAME", "bkai-foundation-models/vietnamese-bi-encoder")
 MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "models"))
 
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://192.168.50.218:8000/api/v1/proxy")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://10.170.45.200:8000/api/v1/proxy")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 STUDENT_ID = os.getenv("STUDENT_ID", "B22DCAT082")
 
-CHUNK_SIZE = 350
+CHUNK_SIZE = 1024
 CHUNK_OVERLAP = 50
-TOP_K = 10
+TOP_K = 5
 
 # ── Load local embedding model (lazy, loaded once) ───────────────────────────
 logger.info(f"Loading embedding model: {EMBED_MODEL_NAME}")
@@ -139,7 +139,7 @@ def extract_letter(raw: str) -> str:
     m = re.search(r"(?<![A-Z])([ABCD])(?![A-Z])", s)
     if m:
         return m.group(1)
-    return "A"
+    return "C"
 
 
 def call_llm(question: str, context: str) -> str:
@@ -194,7 +194,7 @@ def upload(req: UploadRequest):
         store.add(f"{doc_id}_chunk_{idx}", chunk, vec)
 
     logger.success(f"Indexed xong '{doc_id}' | {len(chunks)} chunk | tổng FAISS: {store.index.ntotal}")
-    return UploadResponse(status="indexed", doc_id=doc_id, chunks=len(chunks))
+    return UploadResponse(status="success", doc_id=doc_id, chunks=len(chunks))
 
 
 @app.post("/ask", response_model=AskResponse)

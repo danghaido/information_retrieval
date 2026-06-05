@@ -1,7 +1,7 @@
 import requests
 
-TEACHER_BASE_URL = "http://192.168.50.218:8000/api/v1"
-STUDENT_SERVER_URL = "http://192.168.50.154:5000"
+TEACHER_BASE_URL = "http://10.170.45.200:8000/api/v1"
+STUDENT_SERVER_URL = "http://10.170.45.85:5000"
 STUDENT_ID = "B22DCAT082"
 
 headers = {
