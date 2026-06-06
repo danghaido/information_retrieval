@@ -12,7 +12,9 @@ from typing import Optional
 import faiss
 import numpy as np
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from loguru import logger
 from openai import OpenAI
 from pydantic import BaseModel
@@ -169,6 +171,13 @@ def call_llm(question: str, context: str) -> str:
 
 # ── FastAPI App ───────────────────────────────────────────────────────────────
 app = FastAPI(title="RAG Demo", version="1.0.0")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    body = await request.body()
+    logger.error(f"[422] {request.method} {request.url.path} | body={body.decode('utf-8', errors='replace')} | errors={exc.errors()}")
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 @app.post("/upload", response_model=UploadResponse)
