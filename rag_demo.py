@@ -4,6 +4,7 @@ Endpoint 1: POST /upload  - nhận tài liệu, chunk, đưa vào FAISS
 Endpoint 2: POST /ask     - nhận câu hỏi, tìm kiếm, gọi LLM, trả lời
 """
 
+import json
 import os
 import re
 import uuid
@@ -25,6 +26,11 @@ load_dotenv()
 # ── Config ──────────────────────────────────────────────────────────────────
 EMBED_MODEL_NAME = os.getenv("EMBED_MODEL_NAME", "bkai-foundation-models/vietnamese-bi-encoder")
 MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "models"))
+
+# Thư mục lưu vector DB xuống đĩa (persist qua các lần restart)
+VECTOR_DIR = os.getenv("VECTOR_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "vector_store"))
+INDEX_PATH = os.path.join(VECTOR_DIR, "index.faiss")
+META_PATH = os.path.join(VECTOR_DIR, "meta.json")
 
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://10.170.45.200:8000/api/v1/proxy")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
@@ -69,8 +75,44 @@ class VectorStore:
         scores, indices = self.index.search(vec, k)
         return [(self.ids[i], self.chunks[i], float(scores[0][rank])) for rank, i in enumerate(indices[0]) if i != -1]
 
+    # ── Persistence ──────────────────────────────────────────────────────────
+    def save(self):
+        """Ghi index + metadata (chunks/ids) xuống đĩa."""
+        if self.index is None:
+            logger.warning("Index rỗng, không có gì để lưu")
+            return
+        os.makedirs(VECTOR_DIR, exist_ok=True)
+        faiss.write_index(self.index, INDEX_PATH)
+        with open(META_PATH, "w", encoding="utf-8") as f:
+            json.dump({"chunks": self.chunks, "ids": self.ids}, f, ensure_ascii=False)
+        logger.success(f"Đã lưu vector DB → {VECTOR_DIR} ({self.index.ntotal} vector)")
+
+    def load(self) -> bool:
+        """Load index + metadata từ đĩa nếu có. Trả True nếu load thành công."""
+        if not (os.path.exists(INDEX_PATH) and os.path.exists(META_PATH)):
+            return False
+        self.index = faiss.read_index(INDEX_PATH)
+        with open(META_PATH, encoding="utf-8") as f:
+            meta = json.load(f)
+        self.chunks = meta["chunks"]
+        self.ids = meta["ids"]
+        logger.success(f"Đã load vector DB từ {VECTOR_DIR} ({self.index.ntotal} vector)")
+        return True
+
+    def reset(self):
+        """Xóa toàn bộ index trong RAM và file persisted trên đĩa."""
+        self.index = None
+        self.chunks = []
+        self.ids = []
+        for path in (INDEX_PATH, META_PATH):
+            if os.path.exists(path):
+                os.remove(path)
+        logger.info("Đã reset vector DB (RAM + đĩa)")
+
 
 store = VectorStore()
+# Load lại vector DB đã persist (nếu có) khi khởi động server
+store.load()
 
 
 # ── Pydantic Schemas ─────────────────────────────────────────────────────────
@@ -199,8 +241,13 @@ def upload(req: UploadRequest):
         logger.error(f"Embedding thất bại: {e}")
         raise HTTPException(status_code=502, detail=f"Embedding API lỗi: {e}")
 
+    # Mỗi lần teacher gửi document = build vector DB mới, xóa DB cũ trước
+    store.reset()
     for idx, (chunk, vec) in enumerate(zip(chunks, vectors)):
         store.add(f"{doc_id}_chunk_{idx}", chunk, vec)
+
+    # Persist xuống đĩa để restart server chỉ cần load lại
+    store.save()
 
     logger.success(f"Indexed xong '{doc_id}' | {len(chunks)} chunk | tổng FAISS: {store.index.ntotal}")
     return UploadResponse(status="success", doc_id=doc_id, chunks=len(chunks))

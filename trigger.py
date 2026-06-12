@@ -14,6 +14,7 @@ import json
 import os
 import socket
 import sys
+from typing import Optional
 from urllib.parse import urlparse
 import httpx
 from dotenv import load_dotenv
@@ -24,6 +25,17 @@ STUDENT_ID       = os.getenv("STUDENT_ID",       "B22DCAT082").upper()
 TEACHER_BASE_URL = os.getenv("TEACHER_BASE_URL", "http://10.170.45.200:8000/api/v1")
 
 HEADERS = {"X-Student-ID": STUDENT_ID}
+
+# Vị trí file vector DB mà rag_demo.py persist xuống (để tự suy ra document_received)
+_BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
+VECTOR_DIR = os.getenv("VECTOR_DIR", os.path.join(_BASE_DIR, "vector_store"))
+INDEX_PATH = os.path.join(VECTOR_DIR, "index.faiss")
+META_PATH  = os.path.join(VECTOR_DIR, "meta.json")
+
+
+def has_vector_db() -> bool:
+    """True nếu vector DB đã được build & persist trên đĩa."""
+    return os.path.exists(INDEX_PATH) and os.path.exists(META_PATH)
 
 
 def get_lan_ip() -> str:
@@ -66,12 +78,22 @@ def register(ip: str | None, port: int) -> None:
     pretty(resp)
 
 
-def evaluate() -> None:
+def evaluate(document_received: Optional[bool] = None) -> None:
+    # None = tự suy ra từ việc đã có vector DB persisted hay chưa
+    if document_received is None:
+        document_received = has_vector_db()
+
     print(f"[evaluate] student={STUDENT_ID} — bắt đầu thi...")
-    print("(Teacher sẽ gọi /upload (120s) rồi 10 lần /ask (60s mỗi câu) tới server của bạn)")
+    print(f"[evaluate] document_received={document_received} "
+          f"({'đã có vector DB, Teacher chỉ gửi câu hỏi' if document_received else 'chưa có, Teacher sẽ gửi document để upload trước'})")
+    if document_received:
+        print("(Teacher sẽ gọi thẳng 10 lần /ask (60s mỗi câu) — bỏ qua /upload)")
+    else:
+        print("(Teacher sẽ gọi /upload (120s) rồi 10 lần /ask (60s mỗi câu) tới server của bạn)")
     resp = httpx.post(
         f"{TEACHER_BASE_URL}/competition/evaluate",
         headers=HEADERS,
+        json={"document_received": document_received},
         timeout=60 * 15,
     )
     pretty(resp)
@@ -105,14 +127,22 @@ def main() -> None:
     p_reg.add_argument("--ip", default=None, help="IP LAN máy bạn (mặc định: auto-detect)")
     p_reg.add_argument("--port", type=int, default=5000, help="Port server (mặc định: 5000)")
 
-    sub.add_parser("evaluate", help="Bắt đầu thi")
+    DOC_CHOICES = ("auto", "true", "false")
+    doc_help = "document_received gửi cho Teacher: auto=tự suy từ vector DB trên đĩa (mặc định), true/false=ép giá trị"
+
+    p_eval = sub.add_parser("evaluate", help="Bắt đầu thi")
+    p_eval.add_argument("--document-received", choices=DOC_CHOICES, default="auto", help=doc_help)
     sub.add_parser("reset",    help="Reset trạng thái thi")
     sub.add_parser("result",   help="Xem điểm hiện tại")
     p_all = sub.add_parser("all", help="register -> evaluate -> result (chạy tuần tự)")
     p_all.add_argument("--ip",   default=None)
     p_all.add_argument("--port", type=int, default=5000)
+    p_all.add_argument("--document-received", choices=DOC_CHOICES, default="auto", help=doc_help)
 
     args = parser.parse_args()
+
+    def parse_doc(val: str) -> Optional[bool]:
+        return None if val == "auto" else (val == "true")
 
     print(f"[config] STUDENT_ID    = {STUDENT_ID}")
     print(f"[config] TEACHER_BASE  = {TEACHER_BASE_URL}")
@@ -122,7 +152,7 @@ def main() -> None:
         if args.cmd == "register":
             register(args.ip, args.port)
         elif args.cmd == "evaluate":
-            evaluate()
+            evaluate(parse_doc(args.document_received))
         elif args.cmd == "reset":
             reset()
         elif args.cmd == "result":
@@ -130,7 +160,7 @@ def main() -> None:
         elif args.cmd == "all":
             register(args.ip, args.port)
             print()
-            evaluate()
+            evaluate(parse_doc(args.document_received))
             print()
             result()
     except httpx.HTTPError as e:
